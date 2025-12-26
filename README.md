@@ -51,12 +51,30 @@ Datafication.ParquetConnector is a specialized connector library that bridges Ap
 
 ## Installation
 
-> **Note**: Datafication.ParquetConnector is currently in pre-release. NuGet package availability is pending signing certificate approval and will be available soon.
+> **Note**: Datafication.ParquetConnector is currently in pre-release. NuGet package availability on nuget.org is pending signing certificate approval.
 
-Once available, install via NuGet Package Manager:
+**For Testing and Experimentation:**
+
+The `samples` directory contains a `NuGet.config` and a `packages` directory with pre-built packages. Reference this local source to test and experiment with the SDK:
 
 ```bash
-# Coming soon to NuGet
+# Add reference using the local package source (configured in samples/NuGet.config)
+dotnet add package Datafication.ParquetConnector
+```
+
+**After Repository Updates:**
+
+If the repository is updated with new package versions, clear your local NuGet cache and rebuild:
+
+```bash
+dotnet nuget locals all --clear
+dotnet restore
+dotnet build
+```
+
+**Once Available on NuGet.org:**
+
+```bash
 dotnet add package Datafication.ParquetConnector
 ```
 
@@ -607,9 +625,14 @@ data.RemoveColumn("RowGroup");
 
 ## License
 
-> **Note**: License information is currently being finalized by legal counsel and will be available soon. Please check back for updates.
+This library is licensed under the **Datafication SDK License Agreement**. See the [LICENSE](./LICENSE) file for details.
 
-The Datafication.ParquetConnector library license is under review and will be published here once approved.
+**Summary:**
+- **Free Use**: Organizations with fewer than 5 developers AND annual revenue under $500,000 USD may use the SDK without a commercial license
+- **Commercial License Required**: Organizations with 5+ developers OR annual revenue exceeding $500,000 USD must obtain a commercial license
+- **Open Source Exemption**: Open source projects meeting specific criteria may be exempt from developer count limits
+
+For commercial licensing inquiries, contact [support@datafication.co](mailto:support@datafication.co).
 
 **Third-Party Libraries:**
 - Parquet.Net - MIT License
