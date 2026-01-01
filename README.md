@@ -8,12 +8,13 @@ Datafication.ParquetConnector is a specialized connector library that bridges Ap
 
 ### Key Features
 
-- **Apache Parquet Support**: Read Parquet files in the industry-standard columnar format
+- **Apache Parquet Support**: Read and write Parquet files in the industry-standard columnar format
 - **Row Group Awareness**: Automatically tracks and preserves Parquet row group information
 - **High Performance**: Optimized for large datasets with millions of rows
 - **Multiple Source Types**: Load Parquet from local files or remote URLs (HTTP/HTTPS)
+- **Parquet Export (Sink)**: Transform DataBlock to Parquet format with configurable compression
 - **Streaming Support**: Efficient batch loading for large Parquet files with `GetStorageDataAsync`
-- **Shorthand API**: Simple one-line methods for common Parquet loading scenarios
+- **Shorthand API**: Simple one-line methods for common Parquet loading and export scenarios
 - **Type Preservation**: Maintains native data types from Parquet schema
 - **Columnar Efficiency**: Leverages Parquet's columnar storage for fast data access
 - **Error Handling**: Global error handler configuration for graceful exception management
@@ -35,18 +36,23 @@ Datafication.ParquetConnector is a specialized connector library that bridges Ap
   - [Error Handling](#error-handling)
   - [Working with Parquet Data](#working-with-parquet-data)
   - [High-Performance Data Loading](#high-performance-data-loading)
+  - [Exporting DataBlock to Parquet](#exporting-datablock-to-parquet)
+  - [Parquet Export with Compression Options](#parquet-export-with-compression-options)
 - [Configuration Reference](#configuration-reference)
   - [ParquetConnectorConfiguration](#parquetconnectorconfiguration)
 - [API Reference](#api-reference)
   - [Core Classes](#core-classes)
   - [Extension Methods](#extension-methods)
+  - [Sink Classes](#sink-classes)
 - [Common Patterns](#common-patterns)
   - [Data Lake ETL Pipeline](#data-lake-etl-pipeline)
   - [Parquet to VelocityDataBlock](#parquet-to-velocitydatablock)
   - [Big Data Analysis](#big-data-analysis)
   - [Parquet Data Exploration](#parquet-data-exploration)
+  - [DataBlock to Parquet Export Pipeline](#datablock-to-parquet-export-pipeline)
 - [Performance Tips](#performance-tips)
 - [Understanding Parquet Format](#understanding-parquet-format)
+- [Known Limitations](#known-limitations)
 - [License](#license)
 
 ## Installation
@@ -322,6 +328,58 @@ for (int i = 0; i < runs; i++)
 Console.WriteLine($"Average load time over {runs} runs: {totalMs / runs:N0} ms");
 ```
 
+### Exporting DataBlock to Parquet
+
+Transform any DataBlock into Parquet format using the sink extension methods:
+
+```csharp
+using Datafication.Core.Data;
+using Datafication.Sinks.Connectors.ParquetConnector;
+
+// Create or load a DataBlock
+var dataBlock = new DataBlock();
+dataBlock.AddColumn(new DataColumn("Id", typeof(int)));
+dataBlock.AddColumn(new DataColumn("Name", typeof(string)));
+dataBlock.AddColumn(new DataColumn("Score", typeof(double)));
+
+dataBlock.AddRow(new object[] { 1, "Alice", 95.5 });
+dataBlock.AddRow(new object[] { 2, "Bob", 87.3 });
+dataBlock.AddRow(new object[] { 3, "Charlie", 92.1 });
+
+// Export to Parquet (async)
+var parquetBytes = await dataBlock.ParquetSinkAsync();
+
+// Save to file
+await File.WriteAllBytesAsync("output.parquet", parquetBytes);
+
+// Or use synchronous version
+var parquetBytesSync = dataBlock.ParquetSink();
+```
+
+### Parquet Export with Compression Options
+
+Configure compression when exporting:
+
+```csharp
+using Parquet;
+
+// Use Gzip compression (higher compression ratio)
+var gzipBytes = await dataBlock.ParquetSinkAsync(CompressionMethod.Gzip);
+
+// Use Snappy compression (default, faster)
+var snappyBytes = await dataBlock.ParquetSinkAsync(CompressionMethod.Snappy);
+
+// No compression (fastest, larger files)
+var uncompressedBytes = await dataBlock.ParquetSinkAsync(CompressionMethod.None);
+
+// Check for skipped columns (e.g., nested DataBlock columns)
+var (bytes, skippedColumns) = await dataBlock.ParquetSinkWithSkippedColumnsAsync();
+if (skippedColumns.Count > 0)
+{
+    Console.WriteLine($"Skipped columns: {string.Join(", ", skippedColumns)}");
+}
+```
+
 ## Configuration Reference
 
 ### ParquetConnectorConfiguration
@@ -399,6 +457,35 @@ Task<DataBlock> LoadParquetAsync(this ConnectorExtensions ext, ParquetConnectorC
 // Synchronous shorthand methods
 DataBlock LoadParquet(this ConnectorExtensions ext, Uri source)
 DataBlock LoadParquet(this ConnectorExtensions ext, ParquetConnectorConfiguration config)
+```
+
+### Sink Classes
+
+**ParquetSink** (namespace: `Datafication.Sinks.Connectors.ParquetConnector`)
+- **Description**: Transforms a DataBlock into a Parquet-formatted byte array
+- **Implements**: `IDataSink<byte[]>`
+- **Properties**
+  - `CompressionMethod Compression` - Compression method (default: Snappy)
+  - `List<string> SkippedColumns` - Column names skipped during transform
+- **Methods**
+  - `Task<byte[]> Transform(DataBlock dataBlock)` - Transforms DataBlock to Parquet bytes
+- **Notes**
+  - Nested DataBlock columns are automatically skipped
+  - Guid values are stored as strings
+  - TimeSpan values are stored as milliseconds (Int64)
+  - DateTimeOffset values are converted to UTC DateTime
+
+**ParquetSinkExtension** (namespace: `Datafication.Sinks.Connectors.ParquetConnector`)
+
+```csharp
+// Async extension methods
+Task<byte[]> ParquetSinkAsync(this DataBlock dataBlock, CompressionMethod compression = Snappy)
+Task<(byte[] Data, List<string> SkippedColumns)> ParquetSinkWithSkippedColumnsAsync(this DataBlock dataBlock, CompressionMethod compression = Snappy)
+
+// Synchronous extension methods
+byte[] ParquetSink(this DataBlock dataBlock, CompressionMethod compression = Snappy)
+byte[] ParquetSink(this DataBlock dataBlock, out List<string> skippedColumns, CompressionMethod compression = Snappy)
+(byte[] Data, List<string> SkippedColumns) ParquetSinkWithSkippedColumns(this DataBlock dataBlock, CompressionMethod compression = Snappy)
 ```
 
 ## Common Patterns
@@ -511,6 +598,43 @@ var dailyStats = flights
 
 Console.WriteLine("Daily average delays:");
 Console.WriteLine(await dailyStats.TextTableAsync());
+```
+
+### DataBlock to Parquet Export Pipeline
+
+```csharp
+using Datafication.Core.Data;
+using Datafication.Sinks.Connectors.ParquetConnector;
+
+// Load data from CSV
+var rawData = await DataBlock.Connector.LoadCsvAsync(
+    new Uri("file:///data/sales_report.csv")
+);
+
+// Transform data
+var processedData = rawData
+    .DropNulls(DropNullMode.Any)
+    .Where("Amount", 0, ComparisonOperator.GreaterThan)
+    .Compute("Quarter", "QUARTER(SaleDate)")
+    .Select("CustomerId", "ProductId", "Amount", "Quarter", "SaleDate");
+
+// Export to Parquet with Gzip compression
+var (parquetBytes, skippedColumns) = await processedData.ParquetSinkWithSkippedColumnsAsync(
+    CompressionMethod.Gzip
+);
+
+// Log any skipped columns
+if (skippedColumns.Count > 0)
+{
+    Console.WriteLine($"Warning: Skipped columns: {string.Join(", ", skippedColumns)}");
+}
+
+// Save to data lake
+var outputPath = $"datalake/processed/sales_{DateTime.Now:yyyyMMdd}.parquet";
+await File.WriteAllBytesAsync(outputPath, parquetBytes);
+
+Console.WriteLine($"Exported {processedData.RowCount:N0} rows to {outputPath}");
+Console.WriteLine($"File size: {parquetBytes.Length / 1024.0:N2} KB");
 ```
 
 ### Parquet Data Exploration
@@ -630,6 +754,39 @@ You can safely remove this column if not needed:
 ```csharp
 data.RemoveColumn("RowGroup");
 ```
+
+## Known Limitations
+
+### Parquet Sink (Export) Limitations
+
+The ParquetSink has the following known limitations when exporting DataBlock to Parquet format:
+
+1. **Nested DataBlock Columns Are Skipped**
+   - Columns containing nested `DataBlock` values (complex/hierarchical data) are automatically excluded from the output
+   - Parquet supports nested structures, but the sink currently only handles flat tabular data
+   - Skipped column names are available via the `SkippedColumns` property or the `out` parameter in extension methods
+   - **Recommendation**: Flatten nested structures before exporting, or use the JSON sink for hierarchical data
+
+2. **Type Conversions**
+   - **Guid**: Stored as string (no native Parquet Guid type)
+   - **TimeSpan**: Stored as Int64 (total milliseconds)
+   - **DateTimeOffset**: Converted to UTC DateTime
+   - **Char**: Stored as single-character string
+   - **Decimal**: Uses Parquet's default decimal representation; very high precision values may lose precision
+
+3. **Row Groups**
+   - The sink creates a single row group for all data
+   - For very large exports, consider batching the data and creating multiple files
+
+### Parquet Connector (Import) Limitations
+
+1. **Nested Parquet Structures**
+   - Complex/nested Parquet schemas are not currently supported
+   - Only flat columnar data is read
+
+2. **RowGroup Column**
+   - A `RowGroup` column (integer, 1-based) is automatically added to track source row groups
+   - Remove with `data.RemoveColumn("RowGroup")` if not needed
 
 ## License
 
