@@ -1,5 +1,7 @@
 # Datafication.ParquetConnector
 
+[![NuGet](https://img.shields.io/nuget/v/Datafication.ParquetConnector.svg)](https://www.nuget.org/packages/Datafication.ParquetConnector)
+
 A high-performance Apache Parquet file connector for .NET that provides seamless integration between Parquet columnar data files and the Datafication.Core DataBlock API.
 
 ## Description
