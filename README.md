@@ -62,7 +62,7 @@ Datafication.ParquetConnector is a specialized connector library that bridges Ap
 > **Note**: Datafication.ParquetConnector is currently in pre-release. The packages are now available on nuget.org.
 
 ```bash
-dotnet add package Datafication.ParquetConnector --version 1.0.7
+dotnet add package Datafication.ParquetConnector --version 1.0.8
 ```
 
 **Running the Samples:**
